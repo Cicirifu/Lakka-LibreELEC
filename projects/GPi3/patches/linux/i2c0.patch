@@ -1,0 +1,13 @@
+diff --git a/arch/arm/boot/dts/bcm2710-rpi-3-b-plus.dts b/arch/arm/boot/dts/bcm2710-rpi-3-b-plus.dts
+index 32bff8971b69..919521694cae 100644
+--- a/arch/arm/boot/dts/bcm2710-rpi-3-b-plus.dts
++++ b/arch/arm/boot/dts/bcm2710-rpi-3-b-plus.dts
+@@ -24,7 +24,7 @@
+ 	};
+
+ 	i2c0_pins: i2c0 {
+-		brcm,pins = <0 1>;
++		brcm,pins = <28 29>;
+ 		brcm,function = <4>;
+ 	};
+

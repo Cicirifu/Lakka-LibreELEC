@@ -1,0 +1,21 @@
+/dts-v1/;
+/plugin/;
+
+/{
+    compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&i2c0>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			bq27441: bq27441@36 {
+				compatible = "ti,bq27441";
+				reg = <0x55>;
+				status = "okay";
+			};
+		};
+	};
+};
