@@ -25,12 +25,17 @@ PKG_ARCH="any"
 PKG_LICENSE="GPL"
 PKG_SITE="https://github.com/lakkatv/Lakka"
 PKG_URL=""
-PKG_DEPENDS_TARGET="retroarch $LIBRETRO_CORES wii-u-gc-adapter wiringPi"
+PKG_DEPENDS_TARGET="retroarch $LIBRETRO_CORES gpicase-safeshutdown wii-u-gc-adapter wiringPi"
 PKG_PRIORITY="optional"
 PKG_SECTION="virtual"
-PKG_SHORTDESC="Lakka metapackage for RPi 2"
+PKG_SHORTDESC="Lakka metapackage for GPi 3"
 PKG_LONGDESC=""
 
 PKG_IS_ADDON="no"
 PKG_AUTORECONF="no"
+
+post_install() {
+    enable_service disable-hdmi.service
+}
+
 

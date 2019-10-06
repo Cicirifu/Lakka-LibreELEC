@@ -248,7 +248,6 @@ if [ "$PROJECT" == "GPi3" ]; then
   sed -i -e "s/# video_scale_integer = false/video_scale_integer = true/" $INSTALL/etc/retroarch.cfg
 fi
 
-  
   # System overlay
   mkdir -p $INSTALL/usr/share/retroarch-system
     touch $INSTALL/usr/share/retroarch-system/.placeholder

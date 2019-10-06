@@ -7,7 +7,8 @@ index 32bff8971b69..919521694cae 100644
 
  	i2c0_pins: i2c0 {
 -		brcm,pins = <0 1>;
-+		brcm,pins = <28 29>;
- 		brcm,function = <4>;
++		brcm,pins = <44 45>;
+-		brcm,function = <4>;
++		brcm,function = <5>;
  	};
 

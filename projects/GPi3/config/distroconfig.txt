@@ -32,7 +32,5 @@ disable_overscan=1
 dtparam=audio=on
 
 # Disable the ACT LED on the Pi Zero
-dtparam=act_led_trigger=none
-dtparam=act_led_activelow=on
 dtparam=i2c0
 dtoverlay=bq27xxx-i2c0
