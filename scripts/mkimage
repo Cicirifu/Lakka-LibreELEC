@@ -358,8 +358,8 @@ done
   fi
 
 # gzip
-  echo "image: compressing..."
-  gzip $DISK
+#  echo "image: compressing..."
+#  gzip $DISK
 
 # set owner
   if [ -n "$SUDO_USER" ] ; then

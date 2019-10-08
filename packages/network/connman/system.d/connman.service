@@ -5,6 +5,7 @@ Conflicts=shutdown.target
 Before=network.target multi-user.target shutdown.target
 After=dbus.service
 Wants=network.target
+ConditionPathExists=/storage/.cache/services/wifi.conf
 
 [Service]
 Type=dbus
@@ -15,7 +16,9 @@ ExecStartPre=-/bin/sh -c "echo -e 'nameserver 8.8.8.8\nnameserver 8.8.4.4' > /et
 ExecStartPre=-/bin/sh -c "cat /storage/.cache/hostname > /proc/sys/kernel/hostname"
 ExecStartPre=-/bin/sh -c "cat /storage/.config/hosts.conf > /etc/hosts"
 ExecStartPre=/sbin/ifconfig lo 127.0.0.1 netmask 255.0.0.0 up
+ExecStartPre=-/usr/bin/connmanctl enable wifi
 ExecStart=/bin/sh -c ". /usr/lib/connman/connman-setup; exec /usr/sbin/connmand -nr $CONNMAN_MAIN $CONNMAN_DEBUG"
+ExecStopPost=-/usr/bin/connmanctl disable wifi
 StandardOutput=null
 RestartSec=2
 StartLimitInterval=0
