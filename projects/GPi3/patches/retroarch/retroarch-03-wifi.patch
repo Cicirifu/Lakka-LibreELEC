@@ -1,0 +1,201 @@
+diff --git a/configuration.c b/configuration.c
+index 0c8076df4f..5448dcc417 100644
+--- a/configuration.c
++++ b/configuration.c
+@@ -2125,6 +2125,7 @@ void config_set_defaults(void)
+    settings->bools.ssh_enable                  = filestream_exists(LAKKA_SSH_PATH);
+    settings->bools.samba_enable                = filestream_exists(LAKKA_SAMBA_PATH);
+    settings->bools.bluetooth_enable            = filestream_exists(LAKKA_BLUETOOTH_PATH);
++   settings->bools.wifi_enable = filestream_exists(LAKKA_WIFI_PATH);
+ #endif
+
+ #ifdef HAVE_MENU
+@@ -3097,6 +3098,7 @@ static bool config_load_file(const char *path, settings_t *settings)
+    settings->bools.ssh_enable       = filestream_exists(LAKKA_SSH_PATH);
+    settings->bools.samba_enable     = filestream_exists(LAKKA_SAMBA_PATH);
+    settings->bools.bluetooth_enable = filestream_exists(LAKKA_BLUETOOTH_PATH);
++   settings->bools.wifi_enable = filestream_exists(LAKKA_WIFI_PATH);
+ #endif
+
+    if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_SAVE_PATH, NULL) &&
+@@ -3921,6 +3923,12 @@ bool config_save_file(const char *path)
+                RETRO_VFS_FILE_ACCESS_HINT_NONE));
+    else
+       filestream_delete(LAKKA_BLUETOOTH_PATH);
++   if (settings->bools.wifi_enable)
++      filestream_close(filestream_open(LAKKA_WIFI_PATH,
++               RETRO_VFS_FILE_ACCESS_WRITE,
++               RETRO_VFS_FILE_ACCESS_HINT_NONE));
++   else
++      filestream_delete(LAKKA_WIFI_PATH);
+ #endif
+
+    for (i = 0; i < MAX_USERS; i++)
+diff --git a/configuration.h b/configuration.h
+index 5be786318c..d263a8ddc3 100644
+--- a/configuration.h
++++ b/configuration.h
+@@ -350,6 +350,7 @@ typedef struct settings
+       bool ssh_enable;
+       bool samba_enable;
+       bool bluetooth_enable;
++      bool wifi_enable;
+
+       bool automatically_add_content_to_playlist;
+       bool video_window_show_decorations;
+diff --git a/intl/msg_hash_lbl.h b/intl/msg_hash_lbl.h
+index 0c59ba0b56..33e91a079b 100644
+--- a/intl/msg_hash_lbl.h
++++ b/intl/msg_hash_lbl.h
+@@ -84,6 +84,8 @@ MSG_HASH(MENU_ENUM_LABEL_BLOCK_SRAM_OVERWRITE,
+       "block_sram_overwrite")
+ MSG_HASH(MENU_ENUM_LABEL_BLUETOOTH_ENABLE,
+       "bluetooth_enable")
++MSG_HASH(MENU_ENUM_LABEL_WIFI_ENABLE,
++      "wifi_enable")
+ MSG_HASH(MENU_ENUM_LABEL_BUILDBOT_ASSETS_URL,
+       "buildbot_assets_url")
+ MSG_HASH(MENU_ENUM_LABEL_CACHE_DIRECTORY,
+diff --git a/intl/msg_hash_us.h b/intl/msg_hash_us.h
+index f6e6a43dfa..694cbf953c 100644
+--- a/intl/msg_hash_us.h
++++ b/intl/msg_hash_us.h
+@@ -469,6 +469,10 @@ MSG_HASH(
+     MENU_ENUM_LABEL_VALUE_BLUETOOTH_ENABLE,
+     "Bluetooth"
+     )
++MSG_HASH(
++    MENU_ENUM_LABEL_VALUE_WIFI_ENABLE,
++    "Wi-Fi"
++    )
+ MSG_HASH(
+     MENU_ENUM_LABEL_VALUE_BUILDBOT_ASSETS_URL,
+     "Buildbot Assets URL"
+@@ -4361,6 +4365,10 @@ MSG_HASH(
+     MENU_ENUM_SUBLABEL_BLUETOOTH_ENABLE,
+     "Determines the state of Bluetooth."
+     )
++MSG_HASH(
++    MENU_ENUM_SUBLABEL_WIFI_ENABLE,
++    "Determines the state of Wifi."
++    )
+ MSG_HASH(
+     MENU_ENUM_SUBLABEL_CONFIG_SAVE_ON_EXIT,
+     "Saves changes to the configuration file on exit."
+diff --git a/lakka.h b/lakka.h
+index 2b6073ead4..d74607b291 100644
+--- a/lakka.h
++++ b/lakka.h
+@@ -21,6 +21,7 @@
+ #define LAKKA_SSH_PATH       "/storage/.cache/services/sshd.conf"
+ #define LAKKA_SAMBA_PATH     "/storage/.cache/services/samba.conf"
+ #define LAKKA_BLUETOOTH_PATH "/storage/.cache/services/bluez.conf"
++#define LAKKA_WIFI_PATH      "/storage/.cache/services/wifi.conf"
+ #define LAKKA_UPDATE_DIR     "/storage/.update/"
+ #define LAKKA_CONNMAN_DIR    "/storage/.cache/connman/"
+
+diff --git a/menu/cbs/menu_cbs_sublabel.c b/menu/cbs/menu_cbs_sublabel.c
+index 2d45068e75..ce17cb7554 100644
+--- a/menu/cbs/menu_cbs_sublabel.c
++++ b/menu/cbs/menu_cbs_sublabel.c
+@@ -182,6 +182,7 @@ default_sublabel_macro(action_bind_sublabel_services_settings_list,        MENU_
+ default_sublabel_macro(action_bind_sublabel_ssh_enable,                    MENU_ENUM_SUBLABEL_SSH_ENABLE)
+ default_sublabel_macro(action_bind_sublabel_samba_enable,                  MENU_ENUM_SUBLABEL_SAMBA_ENABLE )
+ default_sublabel_macro(action_bind_sublabel_bluetooth_enable,              MENU_ENUM_SUBLABEL_BLUETOOTH_ENABLE )
++default_sublabel_macro(action_bind_sublabel_wifi_enable,              MENU_ENUM_SUBLABEL_WIFI_ENABLE )
+ default_sublabel_macro(action_bind_sublabel_user_language,                 MENU_ENUM_SUBLABEL_USER_LANGUAGE)
+ default_sublabel_macro(action_bind_sublabel_max_swapchain_images,          MENU_ENUM_SUBLABEL_VIDEO_MAX_SWAPCHAIN_IMAGES )
+ default_sublabel_macro(action_bind_sublabel_online_updater,                MENU_ENUM_SUBLABEL_ONLINE_UPDATER)
+@@ -2781,6 +2782,9 @@ int menu_cbs_init_bind_sublabel(menu_file_list_cbs_t *cbs,
+          case MENU_ENUM_LABEL_BLUETOOTH_ENABLE:
+             BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_bluetooth_enable);
+             break;
++         case MENU_ENUM_LABEL_WIFI_ENABLE:
++            BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_wifi_enable);
++            break;
+          case MENU_ENUM_LABEL_USER_LANGUAGE:
+             BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_user_language);
+             break;
+diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
+index 8af1e99b55..af66e99c34 100644
+--- a/menu/menu_displaylist.c
++++ b/menu/menu_displaylist.c
+@@ -4618,6 +4618,7 @@ unsigned menu_displaylist_build_list(file_list_t *list, enum menu_displaylist_ct
+                {MENU_ENUM_LABEL_SSH_ENABLE,                                            PARSE_ONLY_BOOL},
+                {MENU_ENUM_LABEL_SAMBA_ENABLE,                                          PARSE_ONLY_BOOL},
+                {MENU_ENUM_LABEL_BLUETOOTH_ENABLE,                                      PARSE_ONLY_BOOL},
++               {MENU_ENUM_LABEL_WIFI_ENABLE,                                           PARSE_ONLY_BOOL},
+             };
+
+             for (i = 0; i < ARRAY_SIZE(build_list); i++)
+diff --git a/menu/menu_setting.c b/menu/menu_setting.c
+index b2181f957c..f0b15ed0ab 100644
+--- a/menu/menu_setting.c
++++ b/menu/menu_setting.c
+@@ -6564,6 +6564,18 @@ static void bluetooth_enable_toggle_change_handler(void *data)
+    systemd_service_toggle(LAKKA_BLUETOOTH_PATH, (char*)"bluetooth.service",
+          enable);
+ }
++
++static void wifi_enable_toggle_change_handler(void *data)
++{
++   bool enable           = false;
++   settings_t *settings  = config_get_ptr();
++
++   if (settings && settings->bools.wifi_enable)
++      enable = true;
++
++   systemd_service_toggle(LAKKA_WIFI_PATH, (char*)"connman.service",
++         enable);
++}
+ #endif
+
+ static bool setting_append_list_input_player_options(
+@@ -15211,6 +15223,22 @@ static bool setting_append_list(
+                   SD_FLAG_NONE);
+             (*list)[list_info->index - 1].change_handler = bluetooth_enable_toggle_change_handler;
+
++            CONFIG_BOOL(
++                  list, list_info,
++                  &settings->bools.wifi_enable,
++                  MENU_ENUM_LABEL_WIFI_ENABLE,
++                  MENU_ENUM_LABEL_VALUE_WIFI_ENABLE,
++                  true,
++                  MENU_ENUM_LABEL_VALUE_OFF,
++                  MENU_ENUM_LABEL_VALUE_ON,
++                  &group_info,
++                  &subgroup_info,
++                  parent_group,
++                  general_write_handler,
++                  general_read_handler,
++                  SD_FLAG_NONE);
++            (*list)[list_info->index - 1].change_handler = wifi_enable_toggle_change_handler;
++
+             END_SUB_GROUP(list, list_info, parent_group);
+             END_GROUP(list, list_info, parent_group);
+ #endif
+diff --git a/msg_hash.h b/msg_hash.h
+index 7a2db5e9c9..daf0dc1b87 100644
+--- a/msg_hash.h
++++ b/msg_hash.h
+@@ -1523,6 +1523,7 @@ enum msg_hash_enums
+    MENU_LABEL(SSH_ENABLE),
+    MENU_LABEL(SAMBA_ENABLE),
+    MENU_LABEL(BLUETOOTH_ENABLE),
++   MENU_LABEL(WIFI_ENABLE),
+    MENU_LABEL(NETPLAY_DELAY_FRAMES),
+    MENU_LABEL(NETPLAY_PUBLIC_ANNOUNCE),
+    MENU_LABEL(NETPLAY_START_AS_SPECTATOR),
+diff --git a/wifi/drivers/connmanctl.c b/wifi/drivers/connmanctl.c
+index ff9dc58808..e837e0bfc9 100644
+--- a/wifi/drivers/connmanctl.c
++++ b/wifi/drivers/connmanctl.c
+@@ -61,8 +61,6 @@ static void connmanctl_scan(void)
+       free(lines);
+    lines = string_list_new();
+
+-   pclose(popen("connmanctl enable wifi", "r"));
+-
+    pclose(popen("connmanctl scan wifi", "r"));
+
+    runloop_msg_queue_push("Wi-Fi scan complete.",

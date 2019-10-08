@@ -26,11 +26,19 @@ dtoverlay=pwm-2chan,pin=18,func=2,pin2=19,func2=2
 disable_pvt=1
 disable_audio_dither=1
 dtoverlay=pwm-audio-pi-zero-gpi
+audio_pwm_mode=2
 
 disable_splash=1
 disable_overscan=1
 dtparam=audio=on
 
-# Disable the ACT LED on the Pi Zero
 dtparam=i2c0
 dtoverlay=bq27xxx-i2c0
+
+# Disable the ACT LED.
+dtparam=act_led_trigger=none
+dtparam=act_led_activelow=off
+
+# Disable the PWR LED.
+dtparam=pwr_led_trigger=none
+dtparam=pwr_led_activelow=off
