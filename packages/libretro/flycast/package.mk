@@ -42,7 +42,7 @@ make_target() {
   if [ "$ARCH" == "arm" ]; then
     if [ "$BOARD" == "RPi4" ]; then
       make AS=${AS} CC_AS=${CC} platform=rpi4-gles-neon HAVE_OPENMP=0 LDFLAGS=-lrt
-    elif [ "$PROJECT" == "RPi2" ]; then
+    elif [ "$PROJECT" == "RPi2" || "$PROJECT" == "GPi3" ]; then
       make AS=${AS} CC_AS=${CC} platform=rpi FORCE_GLES=1 HAVE_OPENMP=0 LDFLAGS=-lrt
     else
       make AS=${AS} CC_AS=${CC} platform=armv-gles-neon FORCE_GLES=1 HAVE_OPENMP=0 LDFLAGS=-lrt

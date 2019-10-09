@@ -46,7 +46,7 @@ make_target() {
 	              -I$SYSROOT_PREFIX/usr/include/interface/vmcs_host/linux"
       make platform=rpi GLES=1 FORCE_GLES=1 WITH_DYNAREC=arm
       ;;
-    RPi2|Slice3)
+    RPi2|GPi3|Slice3)
       if [ "$BOARD" == "RPi4" ]; then
         make platform=unix GLES3=1 FORCE_GLES3=1 HAVE_NEON=1 WITH_DYNAREC=arm
       else

@@ -117,7 +117,7 @@ index 2d45068e75..ce17cb7554 100644
              BIND_ACTION_SUBLABEL(cbs, action_bind_sublabel_user_language);
              break;
 diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
-index 8af1e99b55..af66e99c34 100644
+index 8af1e99b55..af5ff07f37 100644
 --- a/menu/menu_displaylist.c
 +++ b/menu/menu_displaylist.c
 @@ -4618,6 +4618,7 @@ unsigned menu_displaylist_build_list(file_list_t *list, enum menu_displaylist_ct
@@ -128,8 +128,17 @@ index 8af1e99b55..af66e99c34 100644
              };
 
              for (i = 0; i < ARRAY_SIZE(build_list); i++)
+@@ -7245,7 +7246,7 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type,
+ #ifdef HAVE_NETWORKING
+          {
+             settings_t      *settings     = config_get_ptr();
+-            if (!string_is_equal(settings->arrays.wifi_driver, "null"))
++            if (settings->bools.wifi_enable && !string_is_equal(settings->arrays.wifi_driver, "null"))
+             {
+                struct string_list *ssid_list = string_list_new();
+                driver_wifi_get_ssids(ssid_list);
 diff --git a/menu/menu_setting.c b/menu/menu_setting.c
-index b2181f957c..b1438b6855 100644
+index b2181f957c..f0b15ed0ab 100644
 --- a/menu/menu_setting.c
 +++ b/menu/menu_setting.c
 @@ -6564,6 +6564,18 @@ static void bluetooth_enable_toggle_change_handler(void *data)
@@ -151,15 +160,6 @@ index b2181f957c..b1438b6855 100644
  #endif
 
  static bool setting_append_list_input_player_options(
-@@ -7591,7 +7603,7 @@ static bool setting_append_list(
- #endif
-
- #ifdef HAVE_LAKKA
--         if (string_is_not_equal(settings->arrays.wifi_driver, "null"))
-+         if (&settings->bools.wifi_enable && string_is_not_equal(settings->arrays.wifi_driver, "null"))
-          {
-             CONFIG_ACTION(
-                   list, list_info,
 @@ -15211,6 +15223,22 @@ static bool setting_append_list(
                    SD_FLAG_NONE);
              (*list)[list_info->index - 1].change_handler = bluetooth_enable_toggle_change_handler;

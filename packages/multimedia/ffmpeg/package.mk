@@ -82,7 +82,7 @@ if [ "$PROJECT" = "Allwinner" ]; then
   PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET libdrm systemd" # systemd is needed for libudev
 fi
 
-if [ "$PROJECT" == "RPi" ] || [ "$PROJECT" == "RPi2" ]; then
+if [ "$PROJECT" == "RPi" ] || [ "$PROJECT" == "RPi2" ] || [ "$PROJECT" == "GPi3" ]; then
   PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET bcm2835-driver"
 fi
 
@@ -101,7 +101,7 @@ pre_patch() {
     FFMPEG_V4L2_REQUEST="--enable-v4l2-request --enable-libudev --enable-libdrm"
   fi
 
-  if [ "$PROJECT" == "RPi" ] || [ "$PROJECT" == "RPi2" ]; then
+  if [ "$PROJECT" == "RPi" ] || [ "$PROJECT" == "RPi2" ] || [ "$PROJECT" == "GPi3" ]; then
     PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET bcm2835-driver"
     if [ "$BOARD" = "RPi4" ]; then
      PKG_PATCH_DIRS+=" rpi4-hevc"
@@ -121,7 +121,7 @@ pre_configure_target() {
 # ffmpeg fails running with GOLD support
   strip_gold
 
-  if [ "$PROJECT" == "RPi" ] || [ "$PROJECT" == "RPi2" ]; then
+  if [ "$PROJECT" == "RPi" ] || [ "$PROJECT" == "RPi2" ] || [ "$PROJECT" == "GPi3" ]; then
     FFMPEG_LIBS="-lbcm_host -lvcos -lvchiq_arm -lmmal -lmmal_core -lmmal_util -lvcsm"
     FFMPEG_RPI="--enable-rpi"
   fi

@@ -42,7 +42,7 @@ make_target() {
     RPi|Slice)
       make platform=armv6-hardfloat-arm1176jzf-s
       ;;
-    RPi2|Slice3)
+    RPi2|GPi3|Slice3)
       make platform=armv7-neon-hardfloat-cortex-a7
       ;;
     imx6)
