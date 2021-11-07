@@ -361,7 +361,7 @@ if [ "${PROJECT}" = "Generic" -a "${CREATE_OVA}" = "yes" ]; then
   [ -n "${SUDO_USER}" ] && chown "${SUDO_USER}:" "${DISK_BASENAME}.ova"
 fi
 
-# gzip
+gzip
 echo "image: compressing..."
 pigz --best --force "${DISK}"
 
@@ -375,5 +375,5 @@ fi
 )
 
 # cleanup
-cleanup
+#cleanup
 exit

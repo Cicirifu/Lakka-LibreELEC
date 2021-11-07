@@ -48,6 +48,7 @@ targets="\
 	RPi|RPi|arm \
 	RPi|RPi2|arm \
 	RPi|RPi3|aarch64 \
+	RPi|Pi02GPi|arm \
 	RPi|RPi4|arm \
 	RPi|RPi4|aarch64 \
 	RPi|RPi4-PiBoyDmg|aarch64 \

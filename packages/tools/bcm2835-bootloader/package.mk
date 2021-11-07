@@ -3,15 +3,15 @@
 # Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="bcm2835-bootloader"
-PKG_VERSION="1.20210928"
-PKG_SHA256="4499955298b0c6d2563bb42194c5cb59154aa6dbce5bf18568b18585cb2b2b12"
+PKG_VERSION="d8754a956967a24ef5e57a1e25347babc3a02a58"
+#PKG_SHA256="4499955298b0c6d2563bb42194c5cb59154aa6dbce5bf18568b18585cb2b2b12"
 PKG_ARCH="arm aarch64"
 PKG_LICENSE="nonfree"
 PKG_SITE="http://www.broadcom.com"
 # URL for commit hash
-#PKG_URL="https://github.com/raspberrypi/firmware/archive/$PKG_VERSION.tar.gz"
+PKG_URL="https://github.com/raspberrypi/firmware/archive/$PKG_VERSION.tar.gz"
 # URL for release tag
-PKG_URL="https://github.com/raspberrypi/firmware/archive/refs/tags/$PKG_VERSION.tar.gz"
+#PKG_URL="https://github.com/raspberrypi/firmware/archive/refs/tags/$PKG_VERSION.tar.gz"
 PKG_DEPENDS_TARGET="toolchain linux bcmstat"
 PKG_LONGDESC="bcm2835-bootloader: Tool to create a bootable kernel for RaspberryPi"
 PKG_TOOLCHAIN="manual"

@@ -169,10 +169,9 @@ DISTRO_SRC="http://sources.libreelec.tv/$LIBREELEC_VERSION"
   LAKKA_MIRROR="http://sources.lakka.tv"
 
   DISTRO_WEBSITE="https://www.lakka.tv/"
-
 # PINN group for the distro
   DISTRO_PINN_GROUP="Games"
-
+#" parallel-n64 "
   LIBRETRO_CORES=""\
 " 2048 "\
 " 81 "\
@@ -248,7 +247,6 @@ DISTRO_SRC="http://sources.libreelec.tv/$LIBREELEC_VERSION"
 " o2em "\
 " openlara "\
 " opera "\
-" parallel-n64 "\
 " pcsx2 "\
 " pcsx_rearmed "\
 " picodrive "\
@@ -284,6 +282,7 @@ DISTRO_SRC="http://sources.libreelec.tv/$LIBREELEC_VERSION"
 " xrick "\
 " yabasanshiro "\
 " yabause "\
+" mgba "\
 ""
 
 # disable some cores
@@ -334,8 +333,11 @@ DISTRO_SRC="http://sources.libreelec.tv/$LIBREELEC_VERSION"
       LIBRETRO_CORES="${LIBRETRO_CORES// virtualjaguar /}"
       LIBRETRO_CORES="${LIBRETRO_CORES// yabause /}"
     fi
-    if [ "$DEVICE" = "RPi2" ]; then
+    if [ "$DEVICE" = "RPi2" -o "$DEVICE" = "Pi02GPi" ]; then
       LIBRETRO_CORES="${LIBRETRO_CORES// play /}"
+    fi
+    if [ "$DEVICE" = "Pi02GPi" ]; then
+      LIBRETRO_CORES="${LIBRETRO_CORES// swanstation /}"
     fi
   elif [ "$PROJECT" = "Amlogic" -o "$PROJECT" = "Rockchip" -o "$PROJECT" = "Allwinner" ]; then
     LIBRETRO_CORES="${LIBRETRO_CORES// yabasanshiro /}"
@@ -350,6 +352,6 @@ DISTRO_SRC="http://sources.libreelec.tv/$LIBREELEC_VERSION"
     fi
   fi
 # add melonds to x86_64 and L4T
-  if [ "$ARCH" = "x86_64" -o "$ARCH" = "aarch64" ]; then
-    LIBRETRO_CORES+=" melonds "
-  fi
+  # if [ "$ARCH" = "x86_64" -o "$ARCH" = "aarch64" ]; then
+  #   LIBRETRO_CORES+=" melonds "
+  # fi

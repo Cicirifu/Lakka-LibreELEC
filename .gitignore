@@ -1,6 +1,9 @@
 # build directorys
 /build.*/
 /.fakeroot.*
+/target
+.parallel
+
 
 # automatically downloaded source files
 /sources/
