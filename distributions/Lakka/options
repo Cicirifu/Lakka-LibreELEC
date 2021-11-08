@@ -236,7 +236,6 @@ DISTRO_SRC="http://sources.libreelec.tv/$LIBREELEC_VERSION"
 " meowpc98 "\
 " mesen "\
 " mesen-s "\
-" mgba "\
 " mrboom "\
 " mu "\
 " mupen64plus_next "\
@@ -283,6 +282,8 @@ DISTRO_SRC="http://sources.libreelec.tv/$LIBREELEC_VERSION"
 " yabasanshiro "\
 " yabause "\
 " mgba "\
+" potator "\
+" retro8 "\
 ""
 
 # disable some cores
