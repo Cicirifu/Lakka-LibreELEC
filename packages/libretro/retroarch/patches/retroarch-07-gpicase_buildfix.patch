@@ -8,6 +8,12 @@ index 4e1caab591..abbed71687 100644
     else
 -      RARCH_LOG("[CRT]: SR integer scaled  X:%d Y:%d \n",srm.x_scale, srm.y_scale);
 +      RARCH_LOG("[CRT]: SR integer scaled  X:%d Y:%d \n",srm_xscale, srm_yscale);
+<<<<<<< HEAD
 
     scaled_width = roundf(patched_width*srm_xscale);
     scaled_height = roundf(patched_height*srm_yscale);
+=======
+ 
+    scaled_width = roundf(patched_width*srm_xscale);
+    scaled_height = roundf(patched_height*srm_yscale);
+>>>>>>> c06bcbe7f2240a0bd0049593c9b77fc6a0b46390
