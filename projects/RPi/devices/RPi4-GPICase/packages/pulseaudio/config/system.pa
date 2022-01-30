@@ -1,0 +1,8 @@
+load-module module-native-protocol-unix
+load-module module-suspend-on-idle
+load-module module-always-sink
+
+load-module module-stream-restore restore_device=false
+load-module module-alsa-card device_id=0 sink_name=HDMI
+load-module module-alsa-card device_id=2 sink_name=Speaker
+set-default-sink Speaker

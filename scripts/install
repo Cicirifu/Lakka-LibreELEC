@@ -74,7 +74,7 @@ if [ "${TARGET}" = "target" ] ; then
 
     if [ -d ${PKG_TMP_DIR}/profile.d ]; then
       mkdir -p ${INSTALL}/etc/profile.d
-      cp ${PKG_TMP_DIR}/profile.d/*.conf ${INSTALL}/etc/profile.d
+      cp ${PKG_TMP_DIR}/profile.d/*.conf ${INSTALL}/etc/profile.d || true
     fi
 
     if [ -d ${PKG_TMP_DIR}/tmpfiles.d ]; then

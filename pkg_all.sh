@@ -51,6 +51,7 @@ targets="\
 	RPi|Pi02GPi|arm \
 	RPi|RPi4|arm \
 	RPi|RPi4|aarch64 \
+	RPi|RPi4-GPICase|aarch64 \
 	RPi|RPi4-PiBoyDmg|aarch64 \
 	RPi|RPi4-RetroDreamer|aarch64 \
 	"

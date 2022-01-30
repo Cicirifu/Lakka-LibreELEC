@@ -1,0 +1,33 @@
+# Use windows key as modifier
+set $mod Mod4
+
+bindsym $mod+Return exec $term
+bindsym $mod+q kill
+bindsym $mod+Shift+c reload
+bindsym $mod+Shift+e exec swaynag -t warning -m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -b 'Yes, exit sway' 'swaymsg exit'
+
+output HDMI-A-1 {
+  resolution 1920x1080@60Hz
+  bg /usr/share/backgrounds/sway/splash-1080.png center '#000000'
+}
+
+output DPI-1 {
+  enable
+  resolution 640x480
+  bg /usr/share/backgrounds/sway/splash-720.png center '#000000'
+  dpms on
+}
+
+workspace Retroarch output HDMI-A-1 DPI-1
+
+bar {
+    position top
+    mode invisible
+}
+
+seat seat0 hide_cursor 0001
+
+default_border none
+
+exec_always "/usr/bin/hotdock"
+exec_always "systemctl import-environment XDG_RUNTIME_DIR WAYLAND_DISPLAY; systemd-notify --pid=$(pidof sway | awk '{print $2}') --ready"

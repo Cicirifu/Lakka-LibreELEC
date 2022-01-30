@@ -1,0 +1,15 @@
+#!/bin/bash
+
+PACTL="pactl --server=/run/pulse/native"
+export PULSE_RUNTIME_PATH=/run/pulse
+HDMI_STATUS=`cat /sys/class/drm/card0/card0-HDMI-A-1/status`
+TARGET="Speaker"
+if [ $HDMI_STATUS = "connected" ]; then
+    TARGET="HDMI"
+fi
+
+pacmd load-module module-alsa-card device_id=0 sink_name=HDMI
+pacmd load-module module-alsa-card device_id=2 sink_name=Speaker
+
+pacmd set-default-sink $TARGET
+$PACTL list short sink-inputs | awk '{print $1}' | xargs -i -n1 $PACTL move-sink-input {} $TARGET

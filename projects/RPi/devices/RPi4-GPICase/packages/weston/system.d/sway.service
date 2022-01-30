@@ -1,0 +1,23 @@
+[Unit]
+Description=Sway Launcher
+Before=graphical.target
+Before=retroarch.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+Environment=HOME=/storage
+Environment=XDG_RUNTIME_DIR=/run
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+WorkingDirectory=/storage
+ExecStart=/usr/bin/sway -V
+ExecStopPost=systemctl unset-environment WAYLAND_DISPLAY
+KillMode=process
+TimeoutStopSec=10
+Restart=always
+RestartSec=2
+StartLimitInterval=0
+
+[Install]
+WantedBy=graphical.target
+WantedBy=retroarch.service

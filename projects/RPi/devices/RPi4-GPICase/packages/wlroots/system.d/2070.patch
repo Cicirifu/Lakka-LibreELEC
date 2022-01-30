@@ -1,0 +1,847 @@
+From b44f491d283ccd9fdd48f6b2c75cb92f690774c1 Mon Sep 17 00:00:00 2001
+From: Simon Ser <contact@emersion.fr>
+Date: Fri, 28 Feb 2020 13:14:06 +0100
+Subject: [PATCH 1/4] buffer: add destroy event
+
+---
+ include/wlr/types/wlr_buffer.h | 4 ++++
+ types/wlr_buffer.c             | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/include/wlr/types/wlr_buffer.h b/include/wlr/types/wlr_buffer.h
+index 6a49a1bf4..d6a98f4b4 100644
+--- a/include/wlr/types/wlr_buffer.h
++++ b/include/wlr/types/wlr_buffer.h
+@@ -25,6 +25,10 @@ struct wlr_buffer {
+ 	const struct wlr_buffer_impl *impl;
+ 
+ 	size_t n_refs;
++
++	struct {
++		struct wl_signal destroy;
++	} events;
+ };
+ 
+ void wlr_buffer_init(struct wlr_buffer *buffer,
+diff --git a/types/wlr_buffer.c b/types/wlr_buffer.c
+index 0cdb3444d..3d6ae7194 100644
+--- a/types/wlr_buffer.c
++++ b/types/wlr_buffer.c
+@@ -4,12 +4,14 @@
+ #include <wlr/types/wlr_buffer.h>
+ #include <wlr/types/wlr_linux_dmabuf_v1.h>
+ #include <wlr/util/log.h>
++#include "util/signal.h"
+ 
+ void wlr_buffer_init(struct wlr_buffer *buffer,
+ 		const struct wlr_buffer_impl *impl) {
+ 	assert(impl->destroy);
+ 	buffer->impl = impl;
+ 	buffer->n_refs = 1;
++	wl_signal_init(&buffer->events.destroy);
+ }
+ 
+ struct wlr_buffer *wlr_buffer_ref(struct wlr_buffer *buffer) {
+@@ -28,6 +30,8 @@ void wlr_buffer_unref(struct wlr_buffer *buffer) {
+ 		return;
+ 	}
+ 
++	wlr_signal_emit_safe(&buffer->events.destroy, NULL);
++
+ 	buffer->impl->destroy(buffer);
+ }
+ 
+
+From f34e608bb05f74b02743576910c85bcfad1adb4e Mon Sep 17 00:00:00 2001
+From: Simon Ser <contact@emersion.fr>
+Date: Fri, 28 Feb 2020 13:25:05 +0100
+Subject: [PATCH 2/4] buffer: add a release event
+
+Consumers call wlr_buffer_lock. Once all consumers are done with the
+buffer, only the producer should have a reference to the buffer. In this
+case, we can release the buffer (and let the producer re-use it).
+---
+ backend/drm/drm.c              | 10 +++---
+ backend/wayland/output.c       |  4 +--
+ include/wlr/types/wlr_buffer.h | 41 ++++++++++++++++++-----
+ types/wlr_buffer.c             | 60 +++++++++++++++++++++++++++-------
+ types/wlr_output.c             |  4 +--
+ types/wlr_surface.c            |  8 ++---
+ 6 files changed, 94 insertions(+), 33 deletions(-)
+
+diff --git a/backend/drm/drm.c b/backend/drm/drm.c
+index fe989e38f..274683e14 100644
+--- a/backend/drm/drm.c
++++ b/backend/drm/drm.c
+@@ -404,8 +404,8 @@ static bool drm_connector_commit_buffer(struct wlr_output *output) {
+ 
+ 	conn->pageflip_pending = true;
+ 	if (output->pending.buffer_type == WLR_OUTPUT_STATE_BUFFER_SCANOUT) {
+-		wlr_buffer_unref(conn->pending_buffer);
+-		conn->pending_buffer = wlr_buffer_ref(output->pending.buffer);
++		wlr_buffer_unlock(conn->pending_buffer);
++		conn->pending_buffer = wlr_buffer_lock(output->pending.buffer);
+ 	}
+ 
+ 	wlr_output_update_enabled(output, true);
+@@ -1538,7 +1538,7 @@ static void page_flip_handler(int fd, unsigned seq,
+ 
+ 	// Release the old buffer as it's not displayed anymore. The pending
+ 	// buffer becomes the current buffer.
+-	wlr_buffer_unref(conn->current_buffer);
++	wlr_buffer_unlock(conn->current_buffer);
+ 	conn->current_buffer = conn->pending_buffer;
+ 	conn->pending_buffer = NULL;
+ 
+@@ -1659,8 +1659,8 @@ static void drm_connector_cleanup(struct wlr_drm_connector *conn) {
+ 		conn->output.needs_frame = false;
+ 		conn->output.frame_pending = false;
+ 
+-		wlr_buffer_unref(conn->pending_buffer);
+-		wlr_buffer_unref(conn->current_buffer);
++		wlr_buffer_unlock(conn->pending_buffer);
++		wlr_buffer_unlock(conn->current_buffer);
+ 		conn->pending_buffer = conn->current_buffer = NULL;
+ 
+ 		/* Fallthrough */
+diff --git a/backend/wayland/output.c b/backend/wayland/output.c
+index 2c80c77fd..1f00209b3 100644
+--- a/backend/wayland/output.c
++++ b/backend/wayland/output.c
+@@ -114,7 +114,7 @@ static void destroy_wl_buffer(struct wlr_wl_buffer *buffer) {
+ 		return;
+ 	}
+ 	wl_buffer_destroy(buffer->wl_buffer);
+-	wlr_buffer_unref(buffer->buffer);
++	wlr_buffer_unlock(buffer->buffer);
+ 	free(buffer);
+ }
+ 
+@@ -173,7 +173,7 @@ static struct wlr_wl_buffer *create_wl_buffer(struct wlr_wl_backend *wl,
+ 		return NULL;
+ 	}
+ 	buffer->wl_buffer = wl_buffer;
+-	buffer->buffer = wlr_buffer_ref(wlr_buffer);
++	buffer->buffer = wlr_buffer_lock(wlr_buffer);
+ 
+ 	wl_buffer_add_listener(wl_buffer, &buffer_listener, buffer);
+ 
+diff --git a/include/wlr/types/wlr_buffer.h b/include/wlr/types/wlr_buffer.h
+index d6a98f4b4..fb308e619 100644
+--- a/include/wlr/types/wlr_buffer.h
++++ b/include/wlr/types/wlr_buffer.h
+@@ -21,27 +21,49 @@ struct wlr_buffer_impl {
+ 		struct wlr_dmabuf_attributes *attribs);
+ };
+ 
++/**
++ * A buffer containing pixel data.
++ *
++ * A buffer has a single producer (the party who created the buffer) and
++ * multiple consumers (parties reading the buffer). When all consumers are done
++ * with the buffer, it gets released and can be re-used by the producer. When
++ * the producer and all consumers are done with the buffer, it gets destroyed.
++ */
+ struct wlr_buffer {
+ 	const struct wlr_buffer_impl *impl;
+ 
+-	size_t n_refs;
++	bool dropped;
++	size_t n_locks;
+ 
+ 	struct {
+ 		struct wl_signal destroy;
++		struct wl_signal release;
+ 	} events;
+ };
+ 
++/**
++ * Initialize a buffer. This function should be called by producers. The
++ * initialized buffer is referenced: once the producer is done with the buffer
++ * they should call wlr_buffer_drop.
++ */
+ void wlr_buffer_init(struct wlr_buffer *buffer,
+ 	const struct wlr_buffer_impl *impl);
+ /**
+- * Reference the buffer.
++ * Unreference the buffer. This function should be called by producers when
++ * they are done with the buffer.
++ */
++void wlr_buffer_drop(struct wlr_buffer *buffer);
++/**
++ * Lock the buffer. This function should be called by consumers to make
++ * sure the buffer can be safely read from. Once the consumer is done with the
++ * buffer, they should call wlr_buffer_unlock.
+  */
+-struct wlr_buffer *wlr_buffer_ref(struct wlr_buffer *buffer);
++struct wlr_buffer *wlr_buffer_lock(struct wlr_buffer *buffer);
+ /**
+- * Unreference the buffer. After this call, `buffer` may not be accessed
+- * anymore.
++ * Unlock the buffer. This function should be called by consumers once they are
++ * done with the buffer.
+  */
+-void wlr_buffer_unref(struct wlr_buffer *buffer);
++void wlr_buffer_unlock(struct wlr_buffer *buffer);
+ /**
+  * Reads the DMA-BUF attributes of the buffer. If this buffer isn't a DMA-BUF,
+  * returns false.
+@@ -70,6 +92,7 @@ struct wlr_client_buffer {
+ 	struct wlr_texture *texture;
+ 
+ 	struct wl_listener resource_destroy;
++	struct wl_listener release;
+ };
+ 
+ struct wlr_renderer;
+@@ -84,9 +107,11 @@ bool wlr_resource_is_buffer(struct wl_resource *resource);
+ bool wlr_resource_get_buffer_size(struct wl_resource *resource,
+ 	struct wlr_renderer *renderer, int *width, int *height);
+ /**
+- * Upload a buffer to the GPU and reference it.
++ * Import a client buffer and lock it.
++ *
++ * Once the caller is done with the buffer, they must call wlr_buffer_unlock.
+  */
+-struct wlr_client_buffer *wlr_client_buffer_create(
++struct wlr_client_buffer *wlr_client_buffer_import(
+ 	struct wlr_renderer *renderer, struct wl_resource *resource);
+ /**
+  * Try to update the buffer's content. On success, returns the updated buffer
+diff --git a/types/wlr_buffer.c b/types/wlr_buffer.c
+index 3d6ae7194..1b0f53d8f 100644
+--- a/types/wlr_buffer.c
++++ b/types/wlr_buffer.c
+@@ -10,29 +10,48 @@ void wlr_buffer_init(struct wlr_buffer *buffer,
+ 		const struct wlr_buffer_impl *impl) {
+ 	assert(impl->destroy);
+ 	buffer->impl = impl;
+-	buffer->n_refs = 1;
+ 	wl_signal_init(&buffer->events.destroy);
++	wl_signal_init(&buffer->events.release);
+ }
+ 
+-struct wlr_buffer *wlr_buffer_ref(struct wlr_buffer *buffer) {
+-	buffer->n_refs++;
+-	return buffer;
++static void buffer_consider_destroy(struct wlr_buffer *buffer) {
++	if (!buffer->dropped || buffer->n_locks > 0) {
++		return;
++	}
++
++	wlr_signal_emit_safe(&buffer->events.destroy, NULL);
++
++	buffer->impl->destroy(buffer);
+ }
+ 
+-void wlr_buffer_unref(struct wlr_buffer *buffer) {
++void wlr_buffer_drop(struct wlr_buffer *buffer) {
+ 	if (buffer == NULL) {
+ 		return;
+ 	}
+ 
+-	assert(buffer->n_refs > 0);
+-	buffer->n_refs--;
+-	if (buffer->n_refs > 0) {
++	assert(!buffer->dropped);
++	buffer->dropped = true;
++	buffer_consider_destroy(buffer);
++}
++
++struct wlr_buffer *wlr_buffer_lock(struct wlr_buffer *buffer) {
++	buffer->n_locks++;
++	return buffer;
++}
++
++void wlr_buffer_unlock(struct wlr_buffer *buffer) {
++	if (buffer == NULL) {
+ 		return;
+ 	}
+ 
+-	wlr_signal_emit_safe(&buffer->events.destroy, NULL);
++	assert(buffer->n_locks > 0);
++	buffer->n_locks--;
+ 
+-	buffer->impl->destroy(buffer);
++	if (buffer->n_locks == 0) {
++		wl_signal_emit(&buffer->events.release, NULL);
++	}
++
++	buffer_consider_destroy(buffer);
+ }
+ 
+ bool wlr_buffer_get_dmabuf(struct wlr_buffer *buffer,
+@@ -134,7 +153,17 @@ static void client_buffer_resource_handle_destroy(struct wl_listener *listener,
+ 	// which case we'll read garbage. We decide to accept this risk.
+ }
+ 
+-struct wlr_client_buffer *wlr_client_buffer_create(
++static void client_buffer_handle_release(struct wl_listener *listener,
++		void *data) {
++	struct wlr_client_buffer *buffer =
++		wl_container_of(listener, buffer, release);
++	if (!buffer->resource_released && buffer->resource != NULL) {
++		wl_buffer_send_release(buffer->resource);
++		buffer->resource_released = true;
++	}
++}
++
++struct wlr_client_buffer *wlr_client_buffer_import(
+ 		struct wlr_renderer *renderer, struct wl_resource *resource) {
+ 	assert(wlr_resource_is_buffer(resource));
+ 
+@@ -198,6 +227,13 @@ struct wlr_client_buffer *wlr_client_buffer_create(
+ 	wl_resource_add_destroy_listener(resource, &buffer->resource_destroy);
+ 	buffer->resource_destroy.notify = client_buffer_resource_handle_destroy;
+ 
++	buffer->release.notify = client_buffer_handle_release;
++	wl_signal_add(&buffer->base.events.release, &buffer->release);
++
++	// Ensure the buffer will be released before being destroyed
++	wlr_buffer_lock(&buffer->base);
++	wlr_buffer_drop(&buffer->base);
++
+ 	return buffer;
+ }
+ 
+@@ -206,7 +242,7 @@ struct wlr_client_buffer *wlr_client_buffer_apply_damage(
+ 		pixman_region32_t *damage) {
+ 	assert(wlr_resource_is_buffer(resource));
+ 
+-	if (buffer->base.n_refs > 1) {
++	if (buffer->base.n_locks > 1) {
+ 		// Someone else still has a reference to the buffer
+ 		return NULL;
+ 	}
+diff --git a/types/wlr_output.c b/types/wlr_output.c
+index 580488be8..7acdffe48 100644
+--- a/types/wlr_output.c
++++ b/types/wlr_output.c
+@@ -430,7 +430,7 @@ static void output_state_clear_buffer(struct wlr_output_state *state) {
+ 		return;
+ 	}
+ 
+-	wlr_buffer_unref(state->buffer);
++	wlr_buffer_unlock(state->buffer);
+ 	state->buffer = NULL;
+ 
+ 	state->committed &= ~WLR_OUTPUT_STATE_BUFFER;
+@@ -603,7 +603,7 @@ bool wlr_output_attach_buffer(struct wlr_output *output,
+ 	output_state_clear_buffer(&output->pending);
+ 	output->pending.committed |= WLR_OUTPUT_STATE_BUFFER;
+ 	output->pending.buffer_type = WLR_OUTPUT_STATE_BUFFER_SCANOUT;
+-	output->pending.buffer = wlr_buffer_ref(buffer);
++	output->pending.buffer = wlr_buffer_lock(buffer);
+ 	return true;
+ }
+ 
+diff --git a/types/wlr_surface.c b/types/wlr_surface.c
+index 244a2cadd..db99413c9 100644
+--- a/types/wlr_surface.c
++++ b/types/wlr_surface.c
+@@ -283,7 +283,7 @@ static void surface_apply_damage(struct wlr_surface *surface) {
+ 	if (resource == NULL) {
+ 		// NULL commit
+ 		if (surface->buffer != NULL) {
+-			wlr_buffer_unref(&surface->buffer->base);
++			wlr_buffer_unlock(&surface->buffer->base);
+ 		}
+ 		surface->buffer = NULL;
+ 		return;
+@@ -300,14 +300,14 @@ static void surface_apply_damage(struct wlr_surface *surface) {
+ 	}
+ 
+ 	struct wlr_client_buffer *buffer =
+-		wlr_client_buffer_create(surface->renderer, resource);
++		wlr_client_buffer_import(surface->renderer, resource);
+ 	if (buffer == NULL) {
+ 		wlr_log(WLR_ERROR, "Failed to upload buffer");
+ 		return;
+ 	}
+ 
+ 	if (surface->buffer != NULL) {
+-		wlr_buffer_unref(&surface->buffer->base);
++		wlr_buffer_unlock(&surface->buffer->base);
+ 	}
+ 	surface->buffer = buffer;
+ }
+@@ -580,7 +580,7 @@ static void surface_handle_resource_destroy(struct wl_resource *resource) {
+ 	pixman_region32_fini(&surface->opaque_region);
+ 	pixman_region32_fini(&surface->input_region);
+ 	if (surface->buffer != NULL) {
+-		wlr_buffer_unref(&surface->buffer->base);
++		wlr_buffer_unlock(&surface->buffer->base);
+ 	}
+ 	free(surface);
+ }
+
+From b3e9c41a9aa42813117b558a413720418916c33c Mon Sep 17 00:00:00 2001
+From: Simon Ser <contact@emersion.fr>
+Date: Fri, 28 Feb 2020 15:25:35 +0100
+Subject: [PATCH 3/4] buffer: add width and height
+
+---
+ include/wlr/types/wlr_buffer.h | 4 +++-
+ types/wlr_buffer.c             | 9 +++++++--
+ 2 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/include/wlr/types/wlr_buffer.h b/include/wlr/types/wlr_buffer.h
+index fb308e619..454c5ba0d 100644
+--- a/include/wlr/types/wlr_buffer.h
++++ b/include/wlr/types/wlr_buffer.h
+@@ -32,6 +32,8 @@ struct wlr_buffer_impl {
+ struct wlr_buffer {
+ 	const struct wlr_buffer_impl *impl;
+ 
++	int width, height;
++
+ 	bool dropped;
+ 	size_t n_locks;
+ 
+@@ -47,7 +49,7 @@ struct wlr_buffer {
+  * they should call wlr_buffer_drop.
+  */
+ void wlr_buffer_init(struct wlr_buffer *buffer,
+-	const struct wlr_buffer_impl *impl);
++	const struct wlr_buffer_impl *impl, int width, int height);
+ /**
+  * Unreference the buffer. This function should be called by producers when
+  * they are done with the buffer.
+diff --git a/types/wlr_buffer.c b/types/wlr_buffer.c
+index 1b0f53d8f..2f914c127 100644
+--- a/types/wlr_buffer.c
++++ b/types/wlr_buffer.c
+@@ -7,9 +7,11 @@
+ #include "util/signal.h"
+ 
+ void wlr_buffer_init(struct wlr_buffer *buffer,
+-		const struct wlr_buffer_impl *impl) {
++		const struct wlr_buffer_impl *impl, int width, int height) {
+ 	assert(impl->destroy);
+ 	buffer->impl = impl;
++	buffer->width = width;
++	buffer->height = height;
+ 	wl_signal_init(&buffer->events.destroy);
+ 	wl_signal_init(&buffer->events.release);
+ }
+@@ -212,6 +214,9 @@ struct wlr_client_buffer *wlr_client_buffer_import(
+ 		return NULL;
+ 	}
+ 
++	int width, height;
++	wlr_resource_get_buffer_size(resource, renderer, &width, &height);
++
+ 	struct wlr_client_buffer *buffer =
+ 		calloc(1, sizeof(struct wlr_client_buffer));
+ 	if (buffer == NULL) {
+@@ -219,7 +224,7 @@ struct wlr_client_buffer *wlr_client_buffer_import(
+ 		wl_resource_post_no_memory(resource);
+ 		return NULL;
+ 	}
+-	wlr_buffer_init(&buffer->base, &client_buffer_impl);
++	wlr_buffer_init(&buffer->base, &client_buffer_impl, width, height);
+ 	buffer->resource = resource;
+ 	buffer->texture = texture;
+ 	buffer->resource_released = resource_released;
+
+From 163cf17f28290e46be68df6ccbf679218d30460a Mon Sep 17 00:00:00 2001
+From: Simon Ser <contact@emersion.fr>
+Date: Sun, 15 Mar 2020 15:02:04 +0100
+Subject: [PATCH 4/4] linux-explicit-synchronization-v1: new protocol
+ implementation
+
+This patch adds support for the
+linux-explicit-synchronization-unstable-v1 protocol. No support has been
+added for sync fences yet. The protocol is already useful as-is because
+it offers per-commit release events (wl_buffer.release is global state).
+
+To test, run weston-simple-dmabuf-egl.
+---
+ .../wlr_linux_explicit_synchronization_v1.h   |  47 +++
+ protocol/meson.build                          |   1 +
+ types/meson.build                             |   1 +
+ types/wlr_linux_explicit_synchronization_v1.c | 297 ++++++++++++++++++
+ 4 files changed, 346 insertions(+)
+ create mode 100644 include/wlr/types/wlr_linux_explicit_synchronization_v1.h
+ create mode 100644 types/wlr_linux_explicit_synchronization_v1.c
+
+diff --git a/include/wlr/types/wlr_linux_explicit_synchronization_v1.h b/include/wlr/types/wlr_linux_explicit_synchronization_v1.h
+new file mode 100644
+index 000000000..7e4720f84
+--- /dev/null
++++ b/include/wlr/types/wlr_linux_explicit_synchronization_v1.h
+@@ -0,0 +1,47 @@
++/*
++ * This an unstable interface of wlroots. No guarantees are made regarding the
++ * future consistency of this API.
++ */
++#ifndef WLR_USE_UNSTABLE
++#error "Add -DWLR_USE_UNSTABLE to enable unstable wlroots features"
++#endif
++
++#ifndef WLR_TYPES_WLR_LINUX_EXPLICIT_SYNCHRONIZATION_H
++#define WLR_TYPES_WLR_LINUX_EXPLICIT_SYNCHRONIZATION_H
++
++#include <wayland-server-core.h>
++
++struct wlr_linux_surface_synchronization_v1 {
++	struct wl_resource *resource;
++	struct wlr_surface *surface;
++
++	int pending_fence_fd;
++	struct wlr_linux_buffer_release_v1 *pending_buffer_release;
++
++	struct wl_listener surface_destroy;
++	struct wl_listener surface_commit;
++};
++
++struct wlr_linux_buffer_release_v1 {
++	struct wl_resource *resource;
++
++	struct wlr_buffer *buffer;
++
++	struct wl_listener buffer_destroy;
++	struct wl_listener buffer_release;
++};
++
++struct wlr_linux_explicit_synchronization_v1 {
++	struct wl_global *global;
++
++	struct {
++		struct wl_signal destroy;
++	} events;
++
++	struct wl_listener display_destroy;
++};
++
++struct wlr_linux_explicit_synchronization_v1 *
++wlr_linux_explicit_synchronization_v1_create(struct wl_display *display);
++
++#endif
+diff --git a/protocol/meson.build b/protocol/meson.build
+index 6275103a3..99e9e2a9f 100644
+--- a/protocol/meson.build
++++ b/protocol/meson.build
+@@ -19,6 +19,7 @@ protocols = {
+ 	'idle-inhibit-unstable-v1': wl_protocol_dir / 'unstable/idle-inhibit/idle-inhibit-unstable-v1.xml',
+ 	'keyboard-shortcuts-inhibit-unstable-v1': wl_protocol_dir / 'unstable/keyboard-shortcuts-inhibit/keyboard-shortcuts-inhibit-unstable-v1.xml',
+ 	'linux-dmabuf-unstable-v1': wl_protocol_dir / 'unstable/linux-dmabuf/linux-dmabuf-unstable-v1.xml',
++	'linux-explicit-synchronization-unstable-v1': wl_protocol_dir / 'unstable/linux-explicit-synchronization/linux-explicit-synchronization-unstable-v1.xml',
+ 	'pointer-constraints-unstable-v1': wl_protocol_dir / 'unstable/pointer-constraints/pointer-constraints-unstable-v1.xml',
+ 	'pointer-gestures-unstable-v1': wl_protocol_dir / 'unstable/pointer-gestures/pointer-gestures-unstable-v1.xml',
+ 	'primary-selection-unstable-v1': wl_protocol_dir / 'unstable/primary-selection/primary-selection-unstable-v1.xml',
+diff --git a/types/meson.build b/types/meson.build
+index face4bdf2..451ab4225 100644
+--- a/types/meson.build
++++ b/types/meson.build
+@@ -41,6 +41,7 @@ wlr_files += files(
+ 	'wlr_keyboard_shortcuts_inhibit_v1.c',
+ 	'wlr_layer_shell_v1.c',
+ 	'wlr_linux_dmabuf_v1.c',
++	'wlr_linux_explicit_synchronization_v1.c',
+ 	'wlr_list.c',
+ 	'wlr_matrix.c',
+ 	'wlr_output_damage.c',
+diff --git a/types/wlr_linux_explicit_synchronization_v1.c b/types/wlr_linux_explicit_synchronization_v1.c
+new file mode 100644
+index 000000000..2b45f3468
+--- /dev/null
++++ b/types/wlr_linux_explicit_synchronization_v1.c
+@@ -0,0 +1,297 @@
++#include <assert.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <wlr/types/wlr_linux_explicit_synchronization_v1.h>
++#include <wlr/types/wlr_surface.h>
++#include "linux-explicit-synchronization-unstable-v1-protocol.h"
++#include "util/signal.h"
++
++#define LINUX_EXPLICIT_SYNCHRONIZATION_V1_VERSION 2
++
++static const struct zwp_linux_surface_synchronization_v1_interface
++	surface_sync_impl;
++
++// Returns NULL if the surface sync is inert
++static struct wlr_linux_surface_synchronization_v1 *
++surface_sync_from_resource(struct wl_resource *resource) {
++	assert(wl_resource_instance_of(resource,
++		&zwp_linux_surface_synchronization_v1_interface,
++		&surface_sync_impl));
++	return wl_resource_get_user_data(resource);
++}
++
++static struct wlr_linux_buffer_release_v1 *buffer_release_from_resource(
++		struct wl_resource *resource) {
++	assert(wl_resource_instance_of(resource,
++		&zwp_linux_buffer_release_v1_interface, NULL));
++	return wl_resource_get_user_data(resource);
++}
++
++static void buffer_release_handle_buffer_destroy(struct wl_listener *listener,
++		void *data) {
++	// This should never happen, a release event should always precede the
++	// destroy event
++	abort();
++}
++
++static void buffer_release_handle_buffer_release(struct wl_listener *listener,
++		void *data) {
++	struct wlr_linux_buffer_release_v1 *buffer_release =
++		wl_container_of(listener, buffer_release, buffer_release);
++	// TODO: get fence FD from wlr_buffer
++	zwp_linux_buffer_release_v1_send_immediate_release(buffer_release->resource);
++	wl_resource_destroy(buffer_release->resource);
++}
++
++static void buffer_release_handle_resource_destroy(struct wl_resource *resource) {
++	struct wlr_linux_buffer_release_v1 *buffer_release =
++		buffer_release_from_resource(resource);
++	wl_list_remove(&buffer_release->buffer_destroy.link);
++	wl_list_remove(&buffer_release->buffer_release.link);
++	free(buffer_release);
++}
++
++static void surface_sync_handle_destroy(struct wl_client *client,
++		struct wl_resource *resource) {
++	wl_resource_destroy(resource);
++}
++
++static void surface_sync_handle_set_acquire_fence(struct wl_client *client,
++		struct wl_resource *resource, int fence_fd) {
++	struct wlr_linux_surface_synchronization_v1 *surface_sync =
++		surface_sync_from_resource(resource);
++	if (surface_sync == NULL) {
++		close(fence_fd);
++		wl_resource_post_error(resource,
++			ZWP_LINUX_SURFACE_SYNCHRONIZATION_V1_ERROR_NO_SURFACE,
++			"the surface has been destroyed");
++		return;
++	}
++
++	if (surface_sync->pending_fence_fd >= 0) {
++		close(fence_fd);
++		wl_resource_post_error(resource,
++			ZWP_LINUX_SURFACE_SYNCHRONIZATION_V1_ERROR_DUPLICATE_FENCE,
++			"a fence FD was already set for this commit");
++		return;
++	}
++
++	// TODO: INVALID_FENCE
++
++	surface_sync->pending_fence_fd = fence_fd;
++}
++
++static void surface_sync_handle_get_release(struct wl_client *client,
++		struct wl_resource *resource, uint32_t id) {
++	struct wlr_linux_surface_synchronization_v1 *surface_sync =
++		surface_sync_from_resource(resource);
++	if (surface_sync == NULL) {
++		wl_resource_post_error(resource,
++			ZWP_LINUX_SURFACE_SYNCHRONIZATION_V1_ERROR_NO_SURFACE,
++			"the surface has been destroyed");
++		return;
++	}
++
++	if (surface_sync->pending_buffer_release != NULL) {
++		wl_resource_post_error(resource,
++			ZWP_LINUX_SURFACE_SYNCHRONIZATION_V1_ERROR_DUPLICATE_RELEASE,
++			"a buffer release has already been requested for this commit");
++		return;
++	}
++
++	struct wlr_linux_buffer_release_v1 *buffer_release =
++		calloc(1, sizeof(*buffer_release));
++	if (buffer_release == NULL) {
++		wl_resource_post_no_memory(resource);
++		return;
++	}
++
++	uint32_t version = wl_resource_get_version(resource);
++	buffer_release->resource = wl_resource_create(client,
++		&zwp_linux_buffer_release_v1_interface, version, id);
++	if (buffer_release->resource == NULL) {
++		wl_resource_post_no_memory(resource);
++		free(buffer_release);
++		return;
++	}
++	wl_resource_set_implementation(buffer_release->resource, NULL,
++		buffer_release, buffer_release_handle_resource_destroy);
++
++	wl_list_init(&buffer_release->buffer_destroy.link);
++	wl_list_init(&buffer_release->buffer_release.link);
++
++	surface_sync->pending_buffer_release = buffer_release;
++}
++
++static const struct zwp_linux_surface_synchronization_v1_interface
++		surface_sync_impl = {
++	.destroy = surface_sync_handle_destroy,
++	.set_acquire_fence = surface_sync_handle_set_acquire_fence,
++	.get_release = surface_sync_handle_get_release,
++};
++
++static void surface_sync_destroy(
++		struct wlr_linux_surface_synchronization_v1 *surface_sync) {
++	if (surface_sync == NULL) {
++		return;
++	}
++	wl_list_remove(&surface_sync->surface_destroy.link);
++	wl_list_remove(&surface_sync->surface_commit.link);
++	wl_resource_set_user_data(surface_sync->resource, NULL);
++	if (surface_sync->pending_fence_fd >= 0) {
++		close(surface_sync->pending_fence_fd);
++	}
++	if (surface_sync->pending_buffer_release != NULL) {
++		wl_resource_destroy(surface_sync->pending_buffer_release->resource);
++	}
++	free(surface_sync);
++}
++
++static void surface_sync_handle_surface_destroy(struct wl_listener *listener,
++		void *data) {
++	struct wlr_linux_surface_synchronization_v1 *surface_sync =
++		wl_container_of(listener, surface_sync, surface_destroy);
++	surface_sync_destroy(surface_sync);
++}
++
++static void surface_sync_handle_surface_commit(struct wl_listener *listener,
++		void *data) {
++	struct wlr_linux_surface_synchronization_v1 *surface_sync =
++		wl_container_of(listener, surface_sync, surface_commit);
++
++	if (surface_sync->pending_fence_fd >= 0) {
++		if (surface_sync->surface->buffer == NULL) {
++			wl_resource_post_error(surface_sync->resource,
++				ZWP_LINUX_SURFACE_SYNCHRONIZATION_V1_ERROR_NO_BUFFER,
++				"acquire fence FD set but no buffer attached");
++			return;
++		}
++
++		// TODO: attach fence FD to wlr_buffer
++		close(surface_sync->pending_fence_fd);
++	}
++
++	if (surface_sync->pending_buffer_release != NULL) {
++		if (surface_sync->surface->buffer == NULL) {
++			wl_resource_post_error(surface_sync->resource,
++				ZWP_LINUX_SURFACE_SYNCHRONIZATION_V1_ERROR_NO_BUFFER,
++				"buffer release requested but no buffer attached");
++			return;
++		}
++
++		struct wlr_buffer *buffer = &surface_sync->surface->buffer->base;
++		struct wlr_linux_buffer_release_v1 *buffer_release =
++			surface_sync->pending_buffer_release;
++
++		buffer_release->buffer = buffer;
++
++		buffer_release->buffer_destroy.notify =
++			buffer_release_handle_buffer_destroy;
++		wl_signal_add(&buffer->events.destroy, &buffer_release->buffer_destroy);
++
++		buffer_release->buffer_release.notify =
++			buffer_release_handle_buffer_release;
++		wl_signal_add(&buffer->events.release, &buffer_release->buffer_release);
++	}
++
++	surface_sync->pending_fence_fd = -1;
++	surface_sync->pending_buffer_release = NULL;
++}
++
++static void surface_sync_handle_resource_destroy(struct wl_resource *resource) {
++	struct wlr_linux_surface_synchronization_v1 *surface_sync =
++		surface_sync_from_resource(resource);
++	surface_sync_destroy(surface_sync);
++}
++
++static void explicit_sync_handle_destroy(struct wl_client *client,
++		struct wl_resource *resource) {
++	wl_resource_destroy(resource);
++}
++
++static void explicit_sync_handle_get_synchronization(struct wl_client *client,
++		struct wl_resource *resource, uint32_t id,
++		struct wl_resource *surface_resource) {
++	struct wlr_surface *surface = wlr_surface_from_resource(surface_resource);
++
++	struct wlr_linux_surface_synchronization_v1 *surface_sync =
++		calloc(1, sizeof(*surface_sync));
++	if (surface_sync == NULL) {
++		wl_resource_post_no_memory(resource);
++		return;
++	}
++
++	uint32_t version = wl_resource_get_version(resource);
++	surface_sync->resource = wl_resource_create(client,
++		&zwp_linux_surface_synchronization_v1_interface, version, id);
++	if (surface_sync->resource == NULL) {
++		wl_resource_post_no_memory(resource);
++		free(surface_sync);
++		return;
++	}
++	wl_resource_set_implementation(surface_sync->resource,
++		&surface_sync_impl, surface_sync, surface_sync_handle_resource_destroy);
++
++	surface_sync->surface = surface;
++	surface_sync->pending_fence_fd = -1;
++
++	surface_sync->surface_destroy.notify = surface_sync_handle_surface_destroy;
++	wl_signal_add(&surface->events.destroy, &surface_sync->surface_destroy);
++
++	surface_sync->surface_commit.notify = surface_sync_handle_surface_commit;
++	wl_signal_add(&surface->events.commit, &surface_sync->surface_commit);
++}
++
++static const struct zwp_linux_explicit_synchronization_v1_interface
++		explicit_sync_impl = {
++	.destroy = explicit_sync_handle_destroy,
++	.get_synchronization = explicit_sync_handle_get_synchronization,
++};
++
++static void explicit_sync_bind(struct wl_client *client, void *data,
++		uint32_t version, uint32_t id) {
++	struct wlr_linux_explicit_synchronization_v1 *explicit_sync = data;
++
++	struct wl_resource *resource = wl_resource_create(client,
++		&zwp_linux_explicit_synchronization_v1_interface, version, id);
++	if (resource == NULL) {
++		wl_client_post_no_memory(client);
++		return;
++	}
++	wl_resource_set_implementation(resource, &explicit_sync_impl,
++		explicit_sync, NULL);
++}
++
++static void handle_display_destroy(struct wl_listener *listener, void *data) {
++	struct wlr_linux_explicit_synchronization_v1 *explicit_sync =
++		wl_container_of(listener, explicit_sync, display_destroy);
++	wlr_signal_emit_safe(&explicit_sync->events.destroy, NULL);
++	wl_list_remove(&explicit_sync->display_destroy.link);
++	wl_global_destroy(explicit_sync->global);
++	free(explicit_sync);
++}
++
++struct wlr_linux_explicit_synchronization_v1 *
++wlr_linux_explicit_synchronization_v1_create(struct wl_display *display) {
++	struct wlr_linux_explicit_synchronization_v1 *explicit_sync =
++		calloc(1, sizeof(*explicit_sync));
++	if (explicit_sync == NULL) {
++		return NULL;
++	}
++
++	wl_signal_init(&explicit_sync->events.destroy);
++
++	explicit_sync->global = wl_global_create(display,
++		&zwp_linux_explicit_synchronization_v1_interface,
++		LINUX_EXPLICIT_SYNCHRONIZATION_V1_VERSION, explicit_sync,
++		explicit_sync_bind);
++	if (explicit_sync->global == NULL) {
++		free(explicit_sync);
++		return NULL;
++	}
++
++	explicit_sync->display_destroy.notify = handle_display_destroy;
++	wl_display_add_destroy_listener(display, &explicit_sync->display_destroy);
++
++	return explicit_sync;
++}

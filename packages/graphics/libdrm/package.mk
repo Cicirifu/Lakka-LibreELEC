@@ -3,11 +3,11 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="libdrm"
-PKG_VERSION="2.4.107"
-PKG_SHA256="c554cef03b033636a975543eab363cc19081cb464595d3da1ec129f87370f888"
+PKG_VERSION="2.4.109"
+#PKG_SHA256="c554cef03b033636a975543eab363cc19081cb464595d3da1ec129f87370f888"
 PKG_LICENSE="GPL"
 PKG_SITE="http://dri.freedesktop.org"
-PKG_URL="http://dri.freedesktop.org/libdrm/libdrm-${PKG_VERSION}.tar.xz"
+PKG_URL="https://dri.freedesktop.org/libdrm/libdrm-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_TARGET="toolchain libpciaccess"
 PKG_LONGDESC="The userspace interface library to kernel DRM services."
 PKG_TOOLCHAIN="meson"

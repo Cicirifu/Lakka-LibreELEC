@@ -85,8 +85,6 @@ else
   build_msg "CLR_BUILD" "BUILD" "${PKG_NAME} $(print_color "CLR_TARGET" "(${TARGET})")" "indent"
 fi
 
-setup_toolchain ${TARGET}
-
 # configure install directory
 if [ "${TARGET}" = "target" ]; then
   INSTALL="${PKG_BUILD}/.install_pkg"
@@ -103,11 +101,39 @@ fi
 # configure debug build defaults
 if [ "${BUILD_WITH_DEBUG}" = "yes" ]; then
   CMAKE_BUILD_TYPE="Debug"
-  MESON_BUILD_TYPE="debug"
+  MESON_DEBUG="-Ddebug=true -Db_ndebug=true"
 else
-  CMAKE_BUILD_TYPE="MinSizeRel"
-  MESON_BUILD_TYPE="plain"
+  CMAKE_BUILD_TYPE="Release"
+  MESON_DEBUG="-Ddebug=false -Db_ndebug=false"
 fi
+
+# setup configure scripts
+PKG_CONFIGURE_SCRIPT="${PKG_CONFIGURE_SCRIPT:-${PKG_BUILD}/configure}"
+PKG_CMAKE_SCRIPT="${PKG_CMAKE_SCRIPT:-${PKG_BUILD}/CMakeLists.txt}"
+PKG_MESON_SCRIPT="${PKG_MESON_SCRIPT:-${PKG_BUILD}/meson.build}"
+
+# auto detect toolchain
+_auto_toolchain=""
+if [ -z "${PKG_TOOLCHAIN}" -o "${PKG_TOOLCHAIN}" = "auto" ]; then
+  if [ -f "${PKG_MESON_SCRIPT}" ]; then
+    PKG_TOOLCHAIN="meson"
+  elif [ -f "${PKG_CMAKE_SCRIPT}" ]; then
+    PKG_TOOLCHAIN="cmake"
+  elif [ -f "${PKG_CONFIGURE_SCRIPT}" ]; then
+    PKG_TOOLCHAIN="configure"
+  elif [ -f "${PKG_BUILD}/Makefile" ]; then
+    PKG_TOOLCHAIN="make"
+  else
+    die "Not possible to detect toolchain automatically. Add PKG_TOOLCHAIN= to package.mk"
+  fi
+  _auto_toolchain=" (auto-detect)"
+fi
+if ! listcontains "meson cmake cmake-make configure ninja make autotools manual" "${PKG_TOOLCHAIN}"; then
+  die "$(print_color "CLR_ERROR" "ERROR:") unknown toolchain ${PKG_TOOLCHAIN}"
+fi
+build_msg "CLR_TOOLCHAIN" "TOOLCHAIN" "${PKG_TOOLCHAIN}${_auto_toolchain}"
+
+setup_toolchain ${TARGET} ${PKG_TOOLCHAIN}
 
 CMAKE_GENERATOR_NINJA="-GNinja \
                        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
@@ -136,7 +162,13 @@ TARGET_MESON_OPTS="--prefix=/usr \
                    --libdir=/usr/lib \
                    --libexecdir=/usr/lib \
                    --localstatedir=/var \
-                   --buildtype=${MESON_BUILD_TYPE}"
+		   ${MESON_DEBUG} \
+		   -Doptimization=${TARGET_OPTIMIZATION}"
+                   #--buildtype=${MESON_BUILD_TYPE}"
+if [ ${BUILD_WITH_DEBUG} != yes ] && flag_enabled "strip" "yes"; then
+  TARGET_MESON_OPTS+=" -Dstrip=true"
+fi
+
 
 # configure HOST build defaults
 HOST_CONFIGURE_OPTS="--host=${HOST_NAME} \
@@ -172,32 +204,6 @@ INIT_MESON_OPTS="${TARGET_MESON_OPTS}"
 BOOTSTRAP_CONFIGURE_OPTS="${HOST_CONFIGURE_OPTS}"
 BOOTSTRAP_CMAKE_OPTS="${HOST_CMAKE_OPTS}"
 BOOTSTRAP_MESON_OPTS="${HOST_MESON_OPTS}"
-
-# setup configure scripts
-PKG_CONFIGURE_SCRIPT="${PKG_CONFIGURE_SCRIPT:-${PKG_BUILD}/configure}"
-PKG_CMAKE_SCRIPT="${PKG_CMAKE_SCRIPT:-${PKG_BUILD}/CMakeLists.txt}"
-PKG_MESON_SCRIPT="${PKG_MESON_SCRIPT:-${PKG_BUILD}/meson.build}"
-
-# auto detect toolchain
-_auto_toolchain=""
-if [ -z "${PKG_TOOLCHAIN}" -o "${PKG_TOOLCHAIN}" = "auto" ]; then
-  if [ -f "${PKG_MESON_SCRIPT}" ]; then
-    PKG_TOOLCHAIN="meson"
-  elif [ -f "${PKG_CMAKE_SCRIPT}" ]; then
-    PKG_TOOLCHAIN="cmake"
-  elif [ -f "${PKG_CONFIGURE_SCRIPT}" ]; then
-    PKG_TOOLCHAIN="configure"
-  elif [ -f "${PKG_BUILD}/Makefile" ]; then
-    PKG_TOOLCHAIN="make"
-  else
-    die "Not possible to detect toolchain automatically. Add PKG_TOOLCHAIN= to package.mk"
-  fi
-  _auto_toolchain=" (auto-detect)"
-fi
-if ! listcontains "meson cmake cmake-make configure ninja make autotools manual" "${PKG_TOOLCHAIN}"; then
-  die "$(print_color "CLR_ERROR" "ERROR:") unknown toolchain ${PKG_TOOLCHAIN}"
-fi
-build_msg "CLR_TOOLCHAIN" "TOOLCHAIN" "${PKG_TOOLCHAIN}${_auto_toolchain}"
 
 # make autoreconf
 if [ "${PKG_TOOLCHAIN}" = "autotools" ]; then
@@ -237,24 +243,24 @@ else
   case "${PKG_TOOLCHAIN}:${TARGET}" in
     # meson builds
     "meson:target")
-      create_meson_conf ${TARGET} ${MESON_CONF}
+      create_meson_conf_target ${TARGET} ${MESON_CONF}
       echo "Executing (target): meson ${TARGET_MESON_OPTS} --cross-file=${MESON_CONF} ${PKG_MESON_OPTS_TARGET} $(dirname ${PKG_MESON_SCRIPT})" | tr -s " "
       CC="${HOST_CC}" CXX="${HOST_CXX}" meson ${TARGET_MESON_OPTS} --cross-file=${MESON_CONF} ${PKG_MESON_OPTS_TARGET} $(dirname ${PKG_MESON_SCRIPT})
       ;;
     "meson:host")
-      create_meson_conf ${TARGET} ${MESON_CONF}
+      create_meson_conf_host ${TARGET} ${MESON_CONF}
       echo "Executing (host): meson ${HOST_MESON_OPTS} --cross-file=${MESON_CONF} ${PKG_MESON_OPTS_HOST} $(dirname ${PKG_MESON_SCRIPT})" | tr -s " "
-      meson ${HOST_MESON_OPTS} --cross-file=${MESON_CONF} ${PKG_MESON_OPTS_HOST} $(dirname ${PKG_MESON_SCRIPT})
+      meson ${HOST_MESON_OPTS} --native-file=${MESON_CONF} ${PKG_MESON_OPTS_HOST} $(dirname ${PKG_MESON_SCRIPT})
       ;;
     "meson:init")
-      create_meson_conf ${TARGET} ${MESON_CONF}
+      create_meson_conf_target ${TARGET} ${MESON_CONF}
       echo "Executing (init): meson ${INIT_MESON_OPTS} --cross-file=${MESON_CONF} ${PKG_MESON_OPTS_INIT} $(dirname ${PKG_MESON_SCRIPT})" | tr -s " "
       meson ${INIT_MESON_OPTS} --cross-file=${MESON_CONF} ${PKG_MESON_OPTS_INIT} $(dirname ${PKG_MESON_SCRIPT})
       ;;
     "meson:bootstrap")
-      create_meson_conf ${TARGET} ${MESON_CONF}
+      create_meson_conf_host ${TARGET} ${MESON_CONF}
       echo "Executing (bootstrap): meson ${BOOTSTRAP_MESON_OPTS} --cross-file=${MESON_CONF} ${PKG_MESON_OPTS_BOOTSTRAP} $(dirname ${PKG_MESON_SCRIPT})" | tr -s " "
-      meson ${BOOTSTRAP_MESON_OPTS} --cross-file=${MESON_CONF} ${PKG_MESON_OPTS_BOOTSTRAP} $(dirname ${PKG_MESON_SCRIPT})
+      meson ${BOOTSTRAP_MESON_OPTS} --native-file=${MESON_CONF} ${PKG_MESON_OPTS_BOOTSTRAP} $(dirname ${PKG_MESON_SCRIPT})
       ;;
 
     # cmake builds with ninja
@@ -441,6 +447,7 @@ acquire_update_lock sysroot
 
 mkdir -p "${PKG_ORIG_SYSROOT_PREFIX}"
 cp -PRf "${SYSROOT_PREFIX}"/* "${PKG_ORIG_SYSROOT_PREFIX}"
+#rsync -av "${SYSROOT_PREFIX}"/ "${PKG_ORIG_SYSROOT_PREFIX}"/
 
 release_update_lock
 
@@ -474,7 +481,7 @@ if [ "${TARGET}" = "target" -o "${TARGET}" = "init" ]; then
         -exec rm -f {} \; 2>/dev/null || :
     find ${INSTALL} -type d -exec rmdir -p {} \; 2>/dev/null || :
 
-    if [ ! "${BUILD_WITH_DEBUG}" = "yes" ]; then
+    if [ ! "${BUILD_WITH_DEBUG}" = "yes" -a ! -z "${STRIP}" ]; then
       ${STRIP} $(find ${INSTALL} \
         -type f -name "*.so*" \
         ! -name "ld-*.so" \

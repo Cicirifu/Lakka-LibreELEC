@@ -18,7 +18,6 @@
 
 PKG_NAME="gpicase-safeshutdown"
 PKG_VERSION="1.0"
-PKG_ARCH="arm"
 PKG_URL=""
 PKG_DEPENDS_TARGET="Python2 python-gpiozero python-colorzero"
 PKG_SECTION="system"

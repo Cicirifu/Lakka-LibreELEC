@@ -19,7 +19,7 @@
 ################################################################################
 
 PKG_NAME="retroarch"
-PKG_VERSION="06a2367"
+PKG_VERSION="fca72f67d19eea58939f0123d2e91a5cec9120ee"
 PKG_ARCH="any"
 PKG_LICENSE="GPLv3"
 PKG_SITE="https://github.com/libretro/RetroArch"
@@ -69,6 +69,10 @@ if [ "$DISPLAYSERVER" = "weston" ]; then
   PKG_DEPENDS_TARGET+=" wayland wayland-protocols"
 fi
 
+if [ "$PULSEAUDIO_SUPPORT" = yes ]; then
+  PKG_DEPENDS_TARGET+=" pulseaudio"
+fi
+
 RETROARCH_GL=""
 
 if [ "$DEVICE" = "OdroidGoAdvance" ]; then
@@ -88,9 +92,12 @@ elif [ "$OPENGLES" = "allwinner-mali" ]; then
   RETROARCH_GL="--enable-opengles --enable-kms --disable-x11"
 elif [ "$OPENGLES" = "mesa" ]; then
   if [ "$PROJECT" = "RPi" ]; then
-    RETROARCH_GL="--disable-x11 --enable-opengles --disable-videocore --enable-kms --enable-egl --disable-wayland"
+    RETROARCH_GL="--disable-x11 --enable-opengles --disable-videocore --enable-kms --enable-egl --enable-wayland"
     if [ "${DEVICE:0:4}" = "RPi4" ]; then
       RETROARCH_GL+=" --enable-opengles3 --enable-opengles3_1"
+    fi
+    if [ "$DEVICE" = "RPi4-GPICase" ]; then
+      RETROARCH_GL=${RETROARCH_GL//--enable-kms/--disable-kms}
     fi
   else
     RETROARCH_GL="--enable-opengles --enable-kms --disable-x11"
@@ -137,6 +144,10 @@ PKG_CONFIGURE_OPTS_TARGET="--disable-vg \
                            --datarootdir=$SYSROOT_PREFIX/usr/share" # don't use host /usr/share!
 
 if [ "$PROJECT" = "L4T" ]; then
+   PKG_CONFIGURE_OPTS_TARGET="$PKG_CONFIGURE_OPTS_TARGET --enable-pulse"
+fi
+
+if [ "$DEVICE" = "RPi4-GPICase" ]; then
    PKG_CONFIGURE_OPTS_TARGET="$PKG_CONFIGURE_OPTS_TARGET --enable-pulse"
 fi
 
@@ -240,6 +251,9 @@ makeinstall_target() {
   sed -i -e "s/# video_gpu_screenshot = true/video_gpu_screenshot = false/" $INSTALL/etc/retroarch.cfg
   sed -i -e "s/# video_fullscreen = false/video_fullscreen = true/" $INSTALL/etc/retroarch.cfg
 
+  if [ "$DEVICE" = "RPi4-GPICase" ]; then
+      sed -i -e "s/# audio_driver =/audio_driver = \"pulse\"/" $INSTALL/etc/retroarch.cfg
+  fi
   # Audio
   if [ ! "$DEVICE" = "Switch" ]; then
     sed -i -e "s/# audio_driver =/audio_driver = \"alsathread\"/" $INSTALL/etc/retroarch.cfg
@@ -247,7 +261,7 @@ makeinstall_target() {
     sed -i -e "s/# audio_driver =/audio_driver = \"pulse\"/" $INSTALL/etc/retroarch.cfg
   fi
   sed -i -e "s/# audio_filter_dir =/audio_filter_dir =\/usr\/share\/audio_filters/" $INSTALL/etc/retroarch.cfg
- if [ "$PROJECT" = "OdroidXU3" ]; then # workaround the 55fps bug
+  if [ "$PROJECT" = "OdroidXU3" ]; then # workaround the 55fps bug
     sed -i -e "s/# audio_out_rate = 48000/audio_out_rate = 44100/" $INSTALL/etc/retroarch.cfg
   fi
 
@@ -318,7 +332,7 @@ makeinstall_target() {
     fi
   fi
 
-  if [ "$DEVICE" = "RPi4-PiBoyDmg" -o "$DEVICE" = "RPi4-RetroDreamer" ]; then
+  if [ "$DEVICE" = "RPi4-PiBoyDmg" -o "$DEVICE" = "RPi4-RetroDreamer" -o "$DEVICE" = "RPi4-GPICase" ]; then
     echo "menu_timedate_enable = false" >> $INSTALL/etc/retroarch.cfg
     echo "menu_scale_factor = \"1.44\"" >> $INSTALL/etc/retroarch.cfg
     sed -i -e "s/input_menu_toggle_gamepad_combo = .*$/input_menu_toggle_gamepad_combo = 4/" $INSTALL/etc/retroarch.cfg
