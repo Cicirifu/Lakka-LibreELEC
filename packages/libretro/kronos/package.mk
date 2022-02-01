@@ -21,6 +21,7 @@
 PKG_NAME="kronos"
 PKG_VERSION="146f429"
 PKG_GIT_CLONE_BRANCH="kronos"
+PKG_ARCH="i386 x86_64"
 PKG_LICENSE="GPLv2"
 PKG_SITE="https://github.com/libretro/yabause"
 PKG_URL="$PKG_SITE.git"
@@ -31,25 +32,24 @@ PKG_SHORTDESC="Port of Kronos to libretro."
 PKG_LONGDESC="Port of Kronos to libretro."
 PKG_TOOLCHAIN="make"
 
-PKG_MAKE_OPTS_TARGET="-C yabause/src/libretro HAVE_CDROM=1"
+PKG_IS_ADDON="no"
+PKG_AUTORECONF="no"
 
 if [ "$OPENGL_SUPPORT" = yes ]; then
   PKG_DEPENDS_TARGET+=" $OPENGL"
-  PKG_MAKE_OPTS_TARGET+=" HAVE_OPENGL=1"
 fi
 
 if [ "$OPENGLES_SUPPORT" = yes ]; then
   PKG_DEPENDS_TARGET+=" $OPENGLES"
-  if [ "$OPENGLES" = "mesa" ]; then
-    PKG_MAKE_OPTS_TARGET+=" HAVE_OPENGL=1"
-  fi
 fi
 
-if [ "$ARCH" = "arm" ]; then
-  PKG_MAKE_OPTS_TARGET+=" platform=armv"
-elif [ "$ARCH" = "aarch64" ]; then
-  PKG_MAKE_OPTS_TARGET+=" platform=arm64"
-fi
+make_target() {
+  if [ "$ARCH" == "aarch64" ]; then
+    make -C yabause/src/libretro platform=arm64
+  else
+    make -C yabause/src/libretro
+  fi
+}
 
 makeinstall_target() {
   mkdir -p $INSTALL/usr/lib/libretro

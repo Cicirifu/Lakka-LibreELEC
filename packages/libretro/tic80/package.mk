@@ -19,7 +19,7 @@
 ################################################################################
 
 PKG_NAME="tic80"
-PKG_VERSION="600341d"
+PKG_VERSION="2646b62"
 PKG_ARCH="any"
 PKG_LICENSE="GPLv3"
 PKG_SITE="https://github.com/nesbox/TIC-80"
@@ -34,7 +34,7 @@ PKG_TOOLCHAIN="cmake"
 PKG_IS_ADDON="no"
 PKG_AUTORECONF="no"
 
-PKG_CMAKE_OPTS_TARGET="-DBUILD_PLAYER=OFF -DBUILD_SDL=OFF -DBUILD_SOKOL=OFF -DBUILD_DEMO_CARTS=OFF -DBUILD_LIBRETRO=ON -DCMAKE_BUILD_TYPE=Release"
+PKG_CMAKE_OPTS_TARGET="-DBUILD_PLAYER=OFF -DBUILD_SDL=OFF -DBUILD_SOKOL=OFF -DBUILD_DEMO_CARTS=OFF -DBUILD_LIBRETRO=ON"
 
 makeinstall_target() {
   mkdir -p $INSTALL/usr/lib/libretro
