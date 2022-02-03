@@ -19,6 +19,7 @@ if [ "${DISPLAYSERVER}" = "x11" ]; then
 elif [ "${DISPLAYSERVER}" = "weston" ]; then
   PKG_MESON_OPTS_TARGET+=" -Denable-x11=false \
                            -Denable-wayland=true"
+  PKG_DEPENDS_TARGET+=" wayland wayland-protocols"
 else
   PKG_MESON_OPTS_TARGET+=" -Denable-x11=false \
                            -Denable-wayland=false"
